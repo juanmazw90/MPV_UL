@@ -17,7 +17,6 @@ import sys
 import os
 import json
 import logging
-import yaml
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +26,7 @@ from sqlalchemy import create_engine, text
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.utils import setup_logging
+from src.config_loader import load_config as _load_config_with_env
 
 log = logging.getLogger(__name__)
 
@@ -65,11 +65,9 @@ UMBRALES_NIVEL = _UMBRALES['nivel']
 # ============================================================================
 
 def load_config():
-    """Carga configuración desde config.yaml"""
+    """Carga configuracion desde config.yaml resolviendo variables de entorno."""
     config_path = Path(__file__).parent / 'config.yaml'
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
+    return _load_config_with_env(str(config_path))
 
 
 def get_db_engine(config):
@@ -297,7 +295,7 @@ def save_predictions_to_db(predictions_df, config, de_modelo_version=None):
                             
                             result = conn.execute(insert_sql, {
                                 'id_maquina_dfos': row['id_maquina_dfos'],
-                                'id_linea': int(row['id_linea']),
+                                'id_linea': int(row['id_linea']) if pd.notna(row['id_linea']) else 0,
                                 'fe_ventana': row['fe_ventana'],
                                 'nm_score': float(row['nm_score']),
                                 'de_nivel_riesgo': row['de_nivel_riesgo'],

@@ -136,29 +136,37 @@ def obtener_predicciones_pendientes(engine_dev, limit=BATCH_LIMIT):
 def cargar_perdidas_en_cache(engine_prod, fecha_inicio, fecha_fin):
     """
     Carga TODAS las perdidas del periodo en memoria para busquedas rapidas.
+    Incluye id_perdida y duracion_minutos para aplicar criterios de severidad.
     """
     log.info("Cargando perdidas en cache desde PROD...")
-    
+
     query = text("""
-        SELECT 
+        SELECT
+            id_perdida,
             id_maquina_dfos,
             fe_inicio,
             fe_fin,
             de_perdida_2,
-            de_perdida_3
+            de_perdida_3,
+            TIMESTAMPDIFF(MINUTE, fe_inicio, fe_fin) AS duracion_minutos
         FROM bui_perdida
         WHERE de_perdida_2 = 'Breakdown & Equipment Failure Time'
           AND fe_inicio BETWEEN :fecha_inicio AND :fecha_fin
         ORDER BY id_maquina_dfos, fe_inicio
     """)
-    
+
     df = pd.read_sql(query, engine_prod, params={
         'fecha_inicio': fecha_inicio - timedelta(days=1),
         'fecha_fin': fecha_fin + timedelta(days=1)
     })
-    
+
+    # Convertir fechas y asegurar tipos
+    df['fe_inicio'] = pd.to_datetime(df['fe_inicio'])
+    df['fe_fin'] = pd.to_datetime(df['fe_fin'])
+    df['duracion_minutos'] = pd.to_numeric(df['duracion_minutos'], errors='coerce').fillna(0)
+
     log.info(f"Perdidas en cache: {len(df):,}")
-    
+
     return df
 
 
@@ -176,6 +184,9 @@ def obtener_ewos_validas(engine_prod, fecha_inicio, fecha_fin):
     """
     log.info("Obteniendo EWOs validas de PROD...")
     
+    # Estado CERRADA = fe_cerrar IS NOT NULL
+    # Estado FINALIZADA_PENDIENTE_CIERRE = fe_fin_mto IS NOT NULL (puede o no tener fe_cerrar)
+    # Ambos estados son EWO valida segun el notebook de entrenamiento
     query = text("""
         SELECT DISTINCT id_perdida
         FROM bui_pm_ewo
@@ -183,7 +194,7 @@ def obtener_ewos_validas(engine_prod, fecha_inicio, fecha_fin):
           AND id_perdida IS NOT NULL
           AND fe_inicio_averia BETWEEN :fecha_inicio AND :fecha_fin
           AND (
-              fe_cerrar IS NOT NULL 
+              fe_cerrar IS NOT NULL
               OR fe_fin_mto IS NOT NULL
           )
     """)
@@ -199,31 +210,62 @@ def obtener_ewos_validas(engine_prod, fecha_inicio, fecha_fin):
     return ewos_set
 
 
-def verificar_falla_grave_en_cache(df_perdidas, id_maquina, fe_ventana):
+def verificar_falla_grave_en_cache(df_perdidas, ewos_validas, id_maquina, fe_ventana):
     """
-    Verifica si hubo falla grave usando dataframe en cache (MUY RAPIDO).
+    Verifica si hubo falla GRAVE en las proximas 24h desde fe_ventana.
+
+    Replica exactamente el criterio del notebook de entrenamiento:
+      target=1 si existe un breakdown cuyo fe_inicio cae en [fe_ventana, fe_ventana+24h)
+      Y cumple AL MENOS UNO de:
+        - Criterio 1: tiene EWO valida (id_perdida en ewos_validas) Y duracion >= 10 min
+        - Criterio 2: duracion >= 60 min
+        - Criterio 3: tipo critico (Mechanical/Electrical/IC) Y duracion >= 20 min
+
+    Args:
+        df_perdidas:  DataFrame con breakdowns en cache (incluye id_perdida, duracion_minutos)
+        ewos_validas: Set de id_perdida que tienen EWO correctiva valida
+        id_maquina:   ID de la maquina a verificar
+        fe_ventana:   Timestamp de la prediccion (hora T)
+
+    Returns:
+        1 si hubo falla grave, 0 si no
     """
-    fe_inicio_busqueda = fe_ventana - timedelta(minutes=15)
-    fe_fin_busqueda = fe_ventana + timedelta(hours=1, minutes=15)
-    
+    # Ventana de prediccion: breakdowns que INICIAN en las proximas 24h
+    fe_fin_ventana = fe_ventana + timedelta(hours=24)
+
     perdidas_maquina = df_perdidas[df_perdidas['id_maquina_dfos'] == id_maquina]
-    
+
     if len(perdidas_maquina) == 0:
         return 0
-    
-    fallas = perdidas_maquina[
-        ((perdidas_maquina['fe_inicio'] >= fe_inicio_busqueda) & 
-         (perdidas_maquina['fe_inicio'] <= fe_fin_busqueda)) |
-        ((perdidas_maquina['fe_fin'] >= fe_inicio_busqueda) & 
-         (perdidas_maquina['fe_fin'] <= fe_fin_busqueda)) |
-        ((perdidas_maquina['fe_inicio'] <= fe_inicio_busqueda) & 
-         (perdidas_maquina['fe_fin'] >= fe_fin_busqueda))
+
+    # Breakdowns cuyo inicio cae en [fe_ventana, fe_ventana + 24h)
+    candidatos = perdidas_maquina[
+        (perdidas_maquina['fe_inicio'] >= fe_ventana) &
+        (perdidas_maquina['fe_inicio'] < fe_fin_ventana)
     ]
-    
-    if len(fallas) == 0:
+
+    if len(candidatos) == 0:
         return 0
-    
-    return 1
+
+    # Aplicar criterios de severidad (igual que el notebook)
+    for _, row in candidatos.iterrows():
+        dur = row['duracion_minutos']
+        tipo = row['de_perdida_3']
+        id_p = row['id_perdida']
+
+        # Criterio 1: tiene EWO valida Y duracion >= 10 min
+        if id_p in ewos_validas and dur >= UMBRAL_DURACION_CON_EWO:
+            return 1
+
+        # Criterio 2: duracion >= 60 min
+        if dur >= UMBRAL_DURACION_LARGA:
+            return 1
+
+        # Criterio 3: tipo critico Y duracion >= 20 min
+        if tipo in TIPOS_CRITICOS and dur >= UMBRAL_DURACION_TIPO_CRITICO:
+            return 1
+
+    return 0
 
 
 def actualizar_prediccion(engine_dev, id_prediccion, target_real, pred_modelo):
@@ -325,7 +367,7 @@ def update_targets(config):
                 pred_modelo = row['fl_pred_modelo']
                 
                 target_real = verificar_falla_grave_en_cache(
-                    df_perdidas, id_maquina, fe_ventana
+                    df_perdidas, ewos_validas, id_maquina, fe_ventana
                 )
                 
                 actualizar_prediccion(engine_dev, id_prediccion, target_real, pred_modelo)

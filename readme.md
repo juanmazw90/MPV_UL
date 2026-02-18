@@ -391,7 +391,8 @@ perdidasDiario/
 │   └── errors.log
 │
 └── scripts/
-    └── ddl_bui_predicciones_hora.sql  # DDL para crear tabla
+    ├── ddl_bui_predicciones_hora.sql  # DDL para crear tabla en BD
+    └── setup_cron.sh                  # Configura ejecucion automatica (Linux/cron)
 ```
 
 ---
@@ -753,7 +754,12 @@ LIMIT 30;
 - Exportar resultados a Excel
 - `config.yaml` reestructurado: DB source/target, umbrales consistentes, sintaxis `${VAR:default}`
 - `config_loader.py` mejorado: soporte defaults, no crashea sin `.env`
+- `scripts/setup_cron.sh` recreado: auto-detecta directorio y Python, instala/quita/verifica cron jobs
 - Limpieza: eliminados scripts obsoletos, tests vacios, .bat con rutas hardcodeadas
+- Fix `update_targets.py`: ventana temporal corregida (±1h → proximas 24h), criterios de severidad
+  replicados del notebook (EWO>=10min, duracion>=60min, critico>=20min), `ewos_validas` ahora se usa
+- Fix `save_predictions.py`: usa `config_loader` para resolver variables de entorno,
+  manejo de `id_linea` nulo (NaN → 0)
 - Fix: Step 17 feature engineering - 1 prediccion por maquina (era 24)
 - Fix: `pipeline_utils.py` - agregada funcion `cargar_features_ordenadas()`
 - Fix: `inference_config.json` - referencia a `.pkl` (era `.txt`)
