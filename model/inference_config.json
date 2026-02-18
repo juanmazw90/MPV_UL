@@ -3,7 +3,7 @@
   "fecha_generacion": "2026-01-05T14:10:40.138324",
   "modelo": {
     "algoritmo": "LightGBM",
-    "archivo": "model_optimized.txt",
+    "archivo": "model_optimized.pkl",
     "best_iteration": 25,
     "n_features": 48
   },

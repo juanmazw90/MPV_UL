@@ -15,8 +15,8 @@ CREATE TABLE bui_predicciones_hora_dia (
     -- Predicción
     fe_ventana DATETIME NOT NULL COMMENT 'Ventana horaria predicha (próximas 24h desde esta hora)',
     nm_score DECIMAL(5,4) NOT NULL COMMENT 'Score del modelo (0.0000-1.0000)',
-    de_nivel_riesgo VARCHAR(20) NOT NULL COMMENT 'critico (>=0.40), moderado (0.31-0.40), bajo (0.10-0.31), normal (<0.10)',
-    fl_pred_modelo TINYINT NOT NULL COMMENT 'Predicción binaria: 1=falla predicha (score>=0.31), 0=sin falla predicha',
+    de_nivel_riesgo VARCHAR(20) NOT NULL COMMENT 'critico (>=0.70), moderado (0.31-0.70), bajo (0.10-0.31), normal (<0.10)',
+    fl_pred_modelo TINYINT NOT NULL COMMENT 'Predicción binaria: 1=falla predicha (score>=0.3724), 0=sin falla predicha',
     
     -- Resultado real (se actualiza después de 24h por update_targets.py)
     fl_target_real TINYINT NULL COMMENT 'NULL=pendiente, 0=no hubo falla, 1=hubo falla (Breakdown & Equipment Failure Time)',

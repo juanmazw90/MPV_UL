@@ -105,12 +105,12 @@ def pivotar_eventos_por_maquina_hora(perdida_clean):
     """
     Pivotea eventos por máquina y ventana horaria
     """
-    log.info("\n Pivoteando eventos por máquina/hora...")
+    log.info("\n📊 Pivoteando eventos por máquina/hora...")
     
 
     # Validar que hay datos
     if perdida_clean is None or len(perdida_clean) == 0:
-        log.warning(" No hay eventos para procesar (DataFrame vacío)")
+        log.warning("⚠️ No hay eventos para procesar (DataFrame vacío)")
         raise ValueError("No hay datos de eventos (bui_perdida) para procesar. "
                         "Verifique que existen registros en el período especificado.")
 
@@ -147,10 +147,10 @@ def pivotar_eventos_por_maquina_hora(perdida_clean):
         del df_chunk, resultados_chunk
         gc.collect()
 
-    log.info(" Concatenando resultados...")
+    log.info("🔗 Concatenando resultados...")
     df_pivoteado = pd.concat(chunks_procesados, ignore_index=True)
     df_pivoteado = df_pivoteado.fillna(0)
-    log.info(f" Pivoteo completado: {df_pivoteado.shape}")
+    log.info(f"✅ Pivoteo completado: {df_pivoteado.shape}")
     
     del chunks_procesados
     gc.collect()
@@ -166,7 +166,7 @@ def calcular_features_mantenimiento(df_pivot, ewos_df, tipo_mant, ventanas_tempo
     """
     Calcula features de mantenimiento para cada ventana
     """
-    log.info(f"\n Procesando mantenimientos {tipo_mant.upper()}...")
+    log.info(f"\n📊 Procesando mantenimientos {tipo_mant.upper()}...")
 
     ewos_df = ewos_df.copy()
     ewos_df['timestamp_hora'] = pd.to_datetime(ewos_df['fe_inicio_averia']).dt.floor('H')
@@ -217,10 +217,10 @@ def agregar_features_mantenimiento(df_pivoteado, bui_pm_ewo):
     """
     Agrega todas las features de mantenimiento al dataset pivoteado
     """
-    log.info("\n Agregando features de mantenimiento...")
+    log.info("\n🔧 Agregando features de mantenimiento...")
     
     if 'estado_ewo' not in bui_pm_ewo.columns:
-        log.info(" estado_ewo no encontrado, calculando...")
+        log.info("⚠️ estado_ewo no encontrado, calculando...")
         
         def calcular_estado_ewo(row):
             if pd.notna(row.get('fe_cerrar')):
@@ -253,7 +253,7 @@ def agregar_features_mantenimiento(df_pivoteado, bui_pm_ewo):
         (bui_pm_ewo['duracion_reparacion_min'] <= 4320)
     ].copy()
 
-    log.info(f" EWOs válidas: {len(ewos_para_features):,}")
+    log.info(f"✅ EWOs válidas: {len(ewos_para_features):,}")
 
     ewos_preventivos = ewos_para_features[ewos_para_features['fl_mantenimiento'] == 1].copy()
     ewos_correctivos = ewos_para_features[ewos_para_features['fl_mantenimiento'] == 0].copy()
@@ -267,7 +267,7 @@ def agregar_features_mantenimiento(df_pivoteado, bui_pm_ewo):
     calcular_features_mantenimiento(df_pivoteado, ewos_correctivos, 'cm', ventanas)
 
     df_pivoteado = df_pivoteado.fillna(0)
-    log.info(f" Features de mantenimiento agregadas")
+    log.info(f"✅ Features de mantenimiento agregadas")
     
     return df_pivoteado
 
@@ -276,7 +276,7 @@ def enriquecer_con_metadata(df_pivoteado, bui_line):
     """
     Enriquece el dataset con metadata de líneas
     """
-    log.info("\n Enriqueciendo con metadata de líneas...")
+    log.info("\n🔗 Enriqueciendo con metadata de líneas...")
     
     df_pivoteado['id_linea'] = df_pivoteado['id_linea'].astype('int64')
     bui_line['id_linea'] = bui_line['id_linea'].astype('int64')
@@ -291,7 +291,7 @@ def enriquecer_con_metadata(df_pivoteado, bui_line):
     df_pivoteado['id_subcategoria'] = df_pivoteado['id_subcategoria'].fillna(0).astype('int32')
     df_pivoteado['id_fabrica_area'] = df_pivoteado['id_fabrica_area'].fillna(0).astype('int32')
     
-    log.info(f" Metadata agregada")
+    log.info(f"✅ Metadata agregada")
     
     return df_pivoteado
 
@@ -300,13 +300,13 @@ def limpiar_datos_anomalos(df):
     """
     Limpia valores anómalos en el dataset
     """
-    log.info("\n Limpiando datos anómalos...")
+    log.info("\n🧹 Limpiando datos anómalos...")
     
     df['run_time'] = df['run_time'].clip(lower=0, upper=120)
     df['total_duration'] = df['total_duration'].clip(lower=0.1, upper=120)
     df.loc[df['total_duration'] == 0, 'total_duration'] = 60.0
     
-    log.info(" Datos limpios")
+    log.info("✅ Datos limpios")
     
     return df
 
@@ -332,7 +332,7 @@ class FeatureEngineer:
         # Cargar artifacts de preprocesamiento
         self._load_artifacts()
         
-        log.info(" Feature Engineer V2 inicializado (con artifacts)")
+        log.info("🔧 Feature Engineer V2 inicializado (con artifacts)")
     
     
     def _load_artifacts(self):
@@ -366,7 +366,7 @@ class FeatureEngineer:
             rutas_str = "\n".join(f"     - {r}" for r in posibles_rutas)
             raise FileNotFoundError(
                 f"\n{'='*80}\n"
-                f" ERROR CRÍTICO: preprocessing_artifacts.pkl NO ENCONTRADO\n"
+                f"❌ ERROR CRÍTICO: preprocessing_artifacts.pkl NO ENCONTRADO\n"
                 f"{'='*80}\n\n"
                 f"   Este archivo es OBLIGATORIO para inferencia en producción.\n"
                 f"   Sin él, hay riesgo de training-serving skew.\n\n"
@@ -377,7 +377,7 @@ class FeatureEngineer:
                 f"{'='*80}\n"
             )
         
-        log.info(f" Cargando artifacts desde: {artifacts_path}")
+        log.info(f"📦 Cargando artifacts desde: {artifacts_path}")
         
         # Cargar archivo
         with open(artifacts_path, 'rb') as f:
@@ -402,7 +402,7 @@ class FeatureEngineer:
                                     for f in faltantes)
             raise ValueError(
                 f"\n{'='*80}\n"
-                f" ERROR: Artifacts INCOMPLETO\n"
+                f"❌ ERROR: Artifacts INCOMPLETO\n"
                 f"{'='*80}\n\n"
                 f"   Faltan los siguientes componentes requeridos:\n\n{faltantes_str}\n\n"
                 f"   Solución: Re-generar preprocessing_artifacts.pkl desde entrenamiento\n"
@@ -417,7 +417,7 @@ class FeatureEngineer:
         if encoders_faltantes:
             raise ValueError(
                 f"\n{'='*80}\n"
-                f" ERROR: Faltan LabelEncoders requeridos\n"
+                f"❌ ERROR: Faltan LabelEncoders requeridos\n"
                 f"{'='*80}\n\n"
                 f"   Encoders faltantes: {encoders_faltantes}\n"
                 f"   Encoders disponibles: {list(self.artifacts['label_encoders'].keys())}\n\n"
@@ -428,18 +428,18 @@ class FeatureEngineer:
         # VALIDAR ESTRUCTURA DE ONEHOT_COLUMNS
         if 'subcategorias' not in self.artifacts['onehot_columns']:
             raise ValueError(
-                " ERROR: artifacts['onehot_columns'] no contiene 'subcategorias'"
+                "❌ ERROR: artifacts['onehot_columns'] no contiene 'subcategorias'"
             )
         
         if 'subcategoria_columns' not in self.artifacts['onehot_columns']:
             raise ValueError(
-                " ERROR: artifacts['onehot_columns'] no contiene 'subcategoria_columns'"
+                "❌ ERROR: artifacts['onehot_columns'] no contiene 'subcategoria_columns'"
             )
         
         # TODO: Agregar validación de versión compatible con modelo
         
         # Logging de confirmación
-        log.info(f" Artifacts validado y cargado correctamente:")
+        log.info(f"✅ Artifacts validado y cargado correctamente:")
         log.info(f"   • Versión: {self.artifacts['version']}")
         log.info(f"   • Fecha generación: {self.artifacts['fecha_generacion']}")
         log.info(f"   • LabelEncoders: {list(self.artifacts['label_encoders'].keys())}")
@@ -467,7 +467,7 @@ class FeatureEngineer:
         Método principal: transforma datos raw en features listos para predicción
         """
         log.info("=" * 80)
-        log.info(" INICIANDO FEATURE ENGINEERING V2 (CON ARTIFACTS)")
+        log.info("🔧 INICIANDO FEATURE ENGINEERING V2 (CON ARTIFACTS)")
         log.info("=" * 80)
         
         # PASO 1: Pivotar eventos por máquina/hora
@@ -522,7 +522,7 @@ class FeatureEngineer:
         df = self._filtrar_ventanas_prediccion(df)
         
         log.info("\n" + "=" * 80)
-        log.info(" FEATURE ENGINEERING V2 COMPLETADO")
+        log.info("✅ FEATURE ENGINEERING V2 COMPLETADO")
         log.info("=" * 80)
         log.info(f"Shape final: {df.shape}")
         
@@ -535,7 +535,7 @@ class FeatureEngineer:
     
     def _crear_features_eventos_detallados(self, df):
         """PASO 5: Features detalladas por evento"""
-        log.info("\n Paso 5: Features detalladas por evento...")
+        log.info("\n📊 Paso 5: Features detalladas por evento...")
         
         eventos_detallados = {
             'speed_loss': ('speed_loss_duration', 'speed_loss_count'),
@@ -570,13 +570,13 @@ class FeatureEngineer:
             df['minor_stoppages_count'] / (df['run_time'] / 60), 0
         )
         
-        log.info(f" {len(eventos_detallados) * 4 + 1} features creadas")
+        log.info(f"✅ {len(eventos_detallados) * 4 + 1} features creadas")
         return df
     
     
     def _crear_metricas_agregadas(self, df):
         """PASO 6: Métricas agregadas"""
-        log.info("\n Paso 6: Métricas agregadas...")
+        log.info("\n📊 Paso 6: Métricas agregadas...")
         
         perdidas_cols = [col for col in df.columns if '_duration' in col and
                          any(x in col for x in ['loss', 'defect', 'failure', 'stoppage', 'idle'])]
@@ -607,13 +607,13 @@ class FeatureEngineer:
             df['duracion_eventos_criticos'] / df['total_perdidas_duracion'], 0
         )
         
-        log.info(" 7 features creadas")
+        log.info("✅ 7 features creadas")
         return df
     
     
     def _crear_features_mantenimiento_mejoradas(self, df):
         """PASO 7: Features de mantenimiento mejoradas"""
-        log.info("\n Paso 7: Features de mantenimiento mejoradas...")
+        log.info("\n🔧 Paso 7: Features de mantenimiento mejoradas...")
         
         df['dias_desde_ultimo_pm'] = df['horas_desde_ultimo_pm'] / 24
         df['dias_desde_ultimo_cm'] = df['horas_desde_ultimo_cm'] / 24
@@ -623,13 +623,13 @@ class FeatureEngineer:
             df['pm_duration_total_7d'] + df['cm_duration_total_7d']
         )
         
-        log.info(" 5 features creadas")
+        log.info("✅ 5 features creadas")
         return df
     
     
     def _crear_rolling_windows(self, df):
         """PASO 8: Rolling windows (2h, 6h, 12h, 24h)"""
-        log.info("\n Paso 8: Rolling windows...")
+        log.info("\n📊 Paso 8: Rolling windows...")
         
         df = df.sort_values(['id_maquina_dfos', 'timestamp_hora']).reset_index(drop=True)
         
@@ -656,13 +656,13 @@ class FeatureEngineer:
             
             gc.collect()
         
-        log.info(f" {len(eventos_rolling) * len(ventanas) * 2} features creadas")
+        log.info(f"✅ {len(eventos_rolling) * len(ventanas) * 2} features creadas")
         return df
     
     
     def _crear_tendencias(self, df):
         """PASO 9: Tendencias y aceleraciones"""
-        log.info("\n Paso 9: Tendencias...")
+        log.info("\n📈 Paso 9: Tendencias...")
         
         eventos_tendencia = [
             'minor_stoppages', 'speed_loss', 'process_failure', 'breakdown_equipment_failure'
@@ -672,7 +672,7 @@ class FeatureEngineer:
             col_12h = f'{evento}_rolling_12h'
             
             if col_12h not in df.columns:
-                log.warning(f" Columna {col_12h} no encontrada")
+                log.warning(f"⚠️ Columna {col_12h} no encontrada")
                 continue
             
             col_12h_prev = df.groupby('id_maquina_dfos')[col_12h].shift(12)
@@ -683,13 +683,13 @@ class FeatureEngineer:
                 ((df[col_12h] - col_12h_prev) / col_12h_prev * 100), 0
             ).clip(-500, 500)
         
-        log.info(f" {len(eventos_tendencia) * 2} features creadas")
+        log.info(f"✅ {len(eventos_tendencia) * 2} features creadas")
         return df
     
     
     def _crear_ratios(self, df):
         """PASO 10: Ratios y proporciones"""
-        log.info("\n Paso 10: Ratios...")
+        log.info("\n📊 Paso 10: Ratios...")
         
         tiempo_total_operativo = df['run_time'] + df['mpl_time'] + df['ucl_time'] + df['pdl_time']
         tiempo_total_operativo = tiempo_total_operativo.clip(lower=0.1)
@@ -712,13 +712,13 @@ class FeatureEngineer:
             df['total_events'] > 0, df['total_duration'] / df['total_events'], 0
         )
         
-        log.info(" 8 features creadas")
+        log.info("✅ 8 features creadas")
         return df
     
     
     def _crear_features_temporales(self, df):
         """PASO 11: Features temporales"""
-        log.info("\n Paso 11: Features temporales...")
+        log.info("\n⏰ Paso 11: Features temporales...")
         
         df['hora_del_dia'] = df['timestamp_hora'].dt.hour
         df['dia_semana'] = df['timestamp_hora'].dt.dayofweek
@@ -736,13 +736,13 @@ class FeatureEngineer:
         df['dia_sin'] = np.sin(2 * np.pi * df['dia_semana'] / 7)
         df['dia_cos'] = np.cos(2 * np.pi * df['dia_semana'] / 7)
         
-        log.info(" 13 features creadas")
+        log.info("✅ 13 features creadas")
         return df
     
     
     def _crear_variabilidad(self, df):
         """PASO 12: Variabilidad y estabilidad (7 días)"""
-        log.info("\n Paso 12: Variabilidad...")
+        log.info("\n📊 Paso 12: Variabilidad...")
         
         eventos_variabilidad = [
             'minor_stoppages_count', 'speed_loss_duration',
@@ -787,7 +787,7 @@ class FeatureEngineer:
         
         df['dias_desde_ultimo_breakdown'] = df['horas_desde_ultimo_breakdown'] / 24
         
-        log.info(f" {len(eventos_variabilidad) * 2 + 2} features creadas")
+        log.info(f"✅ {len(eventos_variabilidad) * 2 + 2} features creadas")
         return df
     
     
@@ -802,14 +802,14 @@ class FeatureEngineer:
         IMPORTANTE: Este método asume que self.artifacts fue validado en __init__.
         No hay fallbacks con fit_transform para evitar training-serving skew.
         """
-        log.info("\n Paso 13: Encoding de categorías (con artifacts)...")
+        log.info("\n🏷️ Paso 13: Encoding de categorías (con artifacts)...")
         
         # ============================================================
         # ONE-HOT ENCODING FIJO PARA SUBCATEGORÍAS
         # ============================================================
         
         subcategorias_esperadas = self.artifacts['onehot_columns']['subcategorias']
-        log.info(f"    Creando {len(subcategorias_esperadas)} columnas one-hot...")
+        log.info(f"   🔧 Creando {len(subcategorias_esperadas)} columnas one-hot...")
         
         # Identificar subcategorías presentes en datos de inferencia
         subcategorias_en_datos = set(df['id_subcategoria'].unique())
@@ -817,7 +817,7 @@ class FeatureEngineer:
         subcategorias_faltantes = set(subcategorias_esperadas) - subcategorias_en_datos
         
         if subcategorias_nuevas:
-            log.warning(f"    Subcategorías NUEVAS (no vistas en entrenamiento): {len(subcategorias_nuevas)}")
+            log.warning(f"   ⚠️ Subcategorías NUEVAS (no vistas en entrenamiento): {len(subcategorias_nuevas)}")
             log.warning(f"      IDs: {sorted(list(subcategorias_nuevas))[:10]}")
             log.warning(f"      → Estas se ignorarán (todas sus columnas serán 0)")
         
@@ -843,13 +843,13 @@ class FeatureEngineer:
         filas_con_0 = (sum_onehot == 0).sum()
         filas_con_multiples = (sum_onehot > 1).sum()
         
-        log.info(f"    {len(subcategorias_esperadas)} columnas one-hot creadas")
+        log.info(f"   ✅ {len(subcategorias_esperadas)} columnas one-hot creadas")
         log.info(f"      Filas con 1 activo: {filas_con_1:,} ({filas_con_1/len(df)*100:.1f}%)")
         log.info(f"      Filas con 0 activos: {filas_con_0:,} ({filas_con_0/len(df)*100:.1f}%) ← subcats nuevas")
         
         if filas_con_multiples > 0:
             raise ValueError(
-                f" ERROR en one-hot encoding: {filas_con_multiples:,} filas tienen múltiples subcategorías activas"
+                f"❌ ERROR en one-hot encoding: {filas_con_multiples:,} filas tienen múltiples subcategorías activas"
             )
         
         # ============================================================
@@ -865,7 +865,7 @@ class FeatureEngineer:
         # Identificar valores no vistos
         valores_no_vistos = set(area_values) - known_areas
         if valores_no_vistos:
-            log.warning(f"    Áreas NO VISTAS en entrenamiento: {len(valores_no_vistos)}")
+            log.warning(f"   ⚠️ Áreas NO VISTAS en entrenamiento: {len(valores_no_vistos)}")
             if len(valores_no_vistos) <= 10:
                 log.warning(f"      IDs: {sorted(list(valores_no_vistos))}")
             log.warning(f"      → Usando código por defecto: {default_area}")
@@ -882,7 +882,7 @@ class FeatureEngineer:
         pct_conocidas = n_conocidas / len(encoded_areas) * 100
         n_unicas = df['id_fabrica_area_encoded'].nunique()
         
-        log.info(f"    id_fabrica_area_encoded creada")
+        log.info(f"   ✅ id_fabrica_area_encoded creada")
         log.info(f"      Valores conocidos: {n_conocidas:,} ({pct_conocidas:.1f}%)")
         log.info(f"      Valores con default: {len(df) - n_conocidas:,} ({100-pct_conocidas:.1f}%)")
         log.info(f"      Valores únicos: {n_unicas}")
@@ -900,7 +900,7 @@ class FeatureEngineer:
         # Identificar valores no vistos
         valores_no_vistos_fab = set(fabrica_values) - known_fabricas
         if valores_no_vistos_fab:
-            log.warning(f"    Fábricas NO VISTAS en entrenamiento: {len(valores_no_vistos_fab)}")
+            log.warning(f"   ⚠️ Fábricas NO VISTAS en entrenamiento: {len(valores_no_vistos_fab)}")
             if len(valores_no_vistos_fab) <= 10:
                 log.warning(f"      IDs: {sorted(list(valores_no_vistos_fab))}")
             log.warning(f"      → Usando código por defecto: {default_fabrica}")
@@ -917,12 +917,12 @@ class FeatureEngineer:
         pct_conocidas_fab = n_conocidas_fab / len(encoded_fabricas) * 100
         n_unicas_fab = df['id_fabrica_encoded'].nunique()
         
-        log.info(f"    id_fabrica_encoded creada")
+        log.info(f"   ✅ id_fabrica_encoded creada")
         log.info(f"      Valores conocidos: {n_conocidas_fab:,} ({pct_conocidas_fab:.1f}%)")
         log.info(f"      Valores con default: {len(df) - n_conocidas_fab:,} ({100-pct_conocidas_fab:.1f}%)")
         log.info(f"      Valores únicos: {n_unicas_fab}")
         
-        log.info(f" Encoding completado exitosamente")
+        log.info(f"✅ Encoding completado exitosamente")
         return df
 
     
@@ -931,7 +931,7 @@ class FeatureEngineer:
         """
         PASO 14: Features de anomalías (CORREGIDO - usa estadísticas guardadas)
         """
-        log.info("\n Paso 14: Features de anomalías (con artifacts)...")
+        log.info("\n⚠️ Paso 14: Features de anomalías (con artifacts)...")
         
         eventos_anomalia = {
             'minor_stoppages_count': 'minor_stoppages',
@@ -990,7 +990,7 @@ class FeatureEngineer:
         outlier_cols = [col for col in df.columns if col.endswith('_is_outlier')]
         df['anomaly_score_composite'] = df[outlier_cols].sum(axis=1)
         
-        log.info(f" {len(eventos_anomalia) * 2 + 1} features creadas")
+        log.info(f"✅ {len(eventos_anomalia) * 2 + 1} features creadas")
         return df
     
     
@@ -998,7 +998,7 @@ class FeatureEngineer:
         """
         PASO 15: Comparación con pares (CORREGIDO - usa estadísticas guardadas)
         """
-        log.info("\n Paso 15: Comparación con pares (con artifacts)...")
+        log.info("\n👥 Paso 15: Comparación con pares (con artifacts)...")
         
         # Usar estadísticas guardadas (ya validadas en __init__)
         stats_pares = self.artifacts['stats_por_grupo']['pares']
@@ -1066,13 +1066,13 @@ class FeatureEngineer:
             
        
         
-        log.info(" 7 features creadas")
+        log.info("✅ 7 features creadas")
         return df
     
     
     def _limpieza_final(self, df):
         """PASO 16: Limpieza final y optimización"""
-        log.info("\n Paso 16: Limpieza final...")
+        log.info("\n🧹 Paso 16: Limpieza final...")
         
         df = df.fillna(0)
         
@@ -1093,22 +1093,26 @@ class FeatureEngineer:
         columnas_a_eliminar_final = [col for col in columnas_eliminar if col in df.columns]
         df = df.drop(columns=columnas_a_eliminar_final)
         
-        log.info(" Limpieza completada")
+        log.info("✅ Limpieza completada")
         return df
     
     
     def _filtrar_ventanas_prediccion(self, df):
-        """PASO 17: Filtrar solo últimas 24 horas para predicción"""
-        log.info("\n Paso 17: Filtrando ventanas para predicción...")
-        
-        fecha_max = df['timestamp_hora'].max()
-        fecha_min_prediccion = fecha_max - pd.Timedelta(hours=24)
-        
-        df_prediccion = df[df['timestamp_hora'] > fecha_min_prediccion].copy()
-        
-        log.info(f" Ventanas filtradas:")
+        """PASO 17: Filtrar última ventana por máquina para predicción.
+
+        Los rolling features ya fueron calculados con toda la historia,
+        así que la última ventana horaria de cada máquina contiene
+        la información más actualizada para predecir las próximas 24h.
+        """
+        log.info("\n🎯 Paso 17: Filtrando última ventana por máquina...")
+
+        # Tomar la última ventana horaria de cada máquina
+        idx_ultimo = df.groupby('id_maquina_dfos')['timestamp_hora'].idxmax()
+        df_prediccion = df.loc[idx_ultimo].copy()
+
+        log.info(f"✅ Ventanas filtradas:")
         log.info(f"   Total original: {len(df):,}")
-        log.info(f"   Para predicción (últimas 24h): {len(df_prediccion):,}")
-        log.info(f"   Rango: {df_prediccion['timestamp_hora'].min()} a {df_prediccion['timestamp_hora'].max()}")
-        
+        log.info(f"   Para predicción (1 por máquina): {len(df_prediccion):,}")
+        log.info(f"   Máquinas: {df_prediccion['id_maquina_dfos'].nunique()}")
+
         return df_prediccion

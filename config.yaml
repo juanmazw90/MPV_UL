@@ -1,0 +1,101 @@
+# =============================================================================
+# CONFIGURACION - Sistema de Mantenimiento Predictivo
+# # =============================================================================
+# Variables con ${...} se resuelven desde .env (ver .env.example)
+# Si no existe .env, se usan placeholders que impiden conexion a BD
+# pero permiten usar el dashboard en modo archivo.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Base de datos
+# -----------------------------------------------------------------------------
+database:
+  # Fuente de lectura (produccion)
+  source:
+    host: ${DB_PROD_HOST:localhost}
+    port: ${DB_PROD_PORT:3306}
+    database: ${DB_PROD_NAME:bui_production}
+    user: ${DB_PROD_USER:readonly_user}
+    password: ${DB_PROD_PASSWORD:CHANGE_ME}
+
+  # Destino de escritura (predicciones)
+  target:
+    host: ${DB_DEV_HOST:localhost}
+    port: ${DB_DEV_PORT:3306}
+    database: ${DB_DEV_NAME:bui_predictions}
+    user: ${DB_DEV_USER:predictive_writer}
+    password: ${DB_DEV_PASSWORD:CHANGE_ME}
+
+# -----------------------------------------------------------------------------
+# Modelo
+# -----------------------------------------------------------------------------
+model:
+  path: "./model/model_optimized.pkl"
+  features_path: "./model/features_utiles.json"
+  config_path: "./model/inference_config.json"
+  preprocessing_path: "./model/preprocessing_artifacts.pkl"
+  version: "v1.0"
+
+# -----------------------------------------------------------------------------
+# Umbrales de alerta (consistentes con inference_config.json)
+# -----------------------------------------------------------------------------
+# IMPORTANTE: Estos valores DEBEN coincidir con inference_config.json
+
+# El predictor.py lee de inference_config.json, NO de aqui.
+# Se documentan aqui solo como referencia.
+thresholds:
+  production: 0.3724709494525155    # Umbral binario (optimizado en test)
+  alertas:
+    critical: 0.7                   # >= 0.70 → Mantenimiento INMEDIATO
+    moderate: 0.31                  # >= 0.31 → Inspeccion PRIORITARIA 24h
+    low: 0.10                       # >= 0.10 → Monitoreo INTENSIVO
+
+# -----------------------------------------------------------------------------
+# Parametros de ejecucion
+# -----------------------------------------------------------------------------
+execution:
+  lookback_hours: 168               # Horas hacia atras para bui_perdida (7 dias)
+  lookback_days_maintenance: 60     # Dias hacia atras para bui_pm_ewo
+  batch_size: 100                   # Maquinas a procesar por lote
+  timeout_minutes: 50               # Timeout maximo de ejecucion
+  fecha_referencia: null             # null = datetime.now() | '2025-07-25' para testing
+  fabrica_id: 21                    # Veszprem
+
+# -----------------------------------------------------------------------------
+# Escritura de predicciones
+# -----------------------------------------------------------------------------
+predictions:
+  table_name: "bui_predicciones_hora_dia"
+  save_to_db: true
+
+# -----------------------------------------------------------------------------
+# Feature engineering (referencia - valores reales en inference_config.json)
+# -----------------------------------------------------------------------------
+feature_engineering:
+  horizonte_prediccion_horas: 24
+  rolling_windows: [2, 6, 12, 24]   # Ventanas horarias para features de eventos
+  ventana_variabilidad: 168          # 7 dias para std/cv
+  ventana_mantenimiento_max: 720     # 30 dias (calculada pero no todas las features se usan)
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging:
+  level: "INFO"
+  console: true
+  file: true
+  log_dir: "./logs"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# -----------------------------------------------------------------------------
+# Notificaciones (opcional)
+# -----------------------------------------------------------------------------
+notifications:
+  enabled: false
+  email_on_error: false
+  email_on_success: false
+  email_to: ${NOTIFY_EMAIL:admin@example.com}
+  smtp_host: ${SMTP_HOST:smtp.gmail.com}
+  smtp_port: ${SMTP_PORT:587}
+  smtp_user: ${SMTP_USER:noreply@example.com}
+  smtp_password: ${SMTP_PASSWORD:CHANGE_ME}

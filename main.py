@@ -5,8 +5,9 @@ main.py - Sistema de Mantenimiento Predictivo
 Orquestador principal del sistema de predicción.
 Configurado para procesar exclusivamente la fábrica de Veszprém.
 
-Se ejecuta 1 vez al día a las 6:00 AM.
-Genera predicciones para el próximo día completo (24 horas).
+Genera 1 predicción por máquina basada en el estado actual (features históricas).
+El timestamp_ventana indica desde cuándo aplica la predicción de 24h.
+Para granularidad horaria, ejecutar vía cron cada hora.
 """
 
 import sys
@@ -94,57 +95,43 @@ def release_lock(lockfile):
         lockfile.close()
 
 
-def generar_predicciones_dia_completo(predictor, feature_engineer, 
-                                      bui_perdida, bui_pm_ewo, bui_line,
-                                      fecha_inicio, logger):
+def generar_predicciones(predictor, feature_engineer,
+                         bui_perdida, bui_pm_ewo, bui_line,
+                         fecha_referencia, logger):
     """
-    Genera predicciones para todas las horas del día (00:00 a 23:00).
+    Genera 1 predicción por máquina basada en el estado actual de features.
+
+    El modelo predice: "habrá falla grave en las próximas 24h desde este momento".
+    El timestamp_ventana se asigna a la hora actual (fecha_referencia).
+
+    Para obtener granularidad horaria, ejecutar este pipeline cada hora vía cron.
     """
-    logger.info(f"\nGenerando predicciones para día completo: {fecha_inicio.date()}")
-    
-    todas_predicciones = []
-    horas_sin_datos = 0
-    horas_error = 0
-    
-    # PASO CRÍTICO: Feature Engineering SOLO UNA VEZ
-    logger.info("[PRE-CÁLCULO] Matriz de características (datos históricos)...")
+    logger.info(f"\nGenerando predicciones para: {fecha_referencia}")
+
+    # Feature Engineering
+    logger.info("[FEATURES] Calculando matriz de características...")
     try:
         X = feature_engineer.transform(bui_perdida, bui_pm_ewo, bui_line)
         logger.info(f"   Matriz X: {X.shape} ({X['id_maquina_dfos'].nunique()} máquinas)")
     except Exception as e:
         logger.error(f"   Error en feature engineering: {e}", exc_info=True)
         return pd.DataFrame()
-    
+
     if len(X) == 0:
         logger.error("   Feature engineering devolvió matriz vacía")
         return pd.DataFrame()
-    
-    # BUCLE: 24 horas
-    for hora_offset in range(1, 25):
-        ventana_actual = fecha_inicio + timedelta(hours=hora_offset)
-        
-        try:
-            predictions = predictor.predict(X)
-            
-            if len(predictions) == 0:
-                horas_sin_datos += 1
-                continue
-            
-            # Asignar el timestamp específico de la ventana
-            predictions['timestamp_ventana'] = ventana_actual
-            todas_predicciones.append(predictions)
-        
-        except Exception as e:
-            logger.error(f"     Error prediciendo hora {hora_offset}: {e}")
-            horas_error += 1
-            continue
-    
-    if not todas_predicciones:
-        logger.error(f" No se generaron predicciones")
+
+    # Predicción (1 vez, 1 resultado por máquina)
+    predictions = predictor.predict(X)
+
+    if len(predictions) == 0:
+        logger.error("   No se generaron predicciones")
         return pd.DataFrame()
-    
-    predictions_df = pd.concat(todas_predicciones, ignore_index=True)
-    return predictions_df
+
+    # Asignar timestamp de la ventana de predicción
+    predictions['timestamp_ventana'] = fecha_referencia
+
+    return predictions
 
 
 def main():
@@ -210,12 +197,11 @@ def main():
         logger.info(f"[INFO] Procesando {bui_perdida['id_maquina_dfos'].nunique()} máquinas de Veszprém")
 
         # =====================================================================
-        # PASO 2: FEATURE ENGINEERING
+        # PASO 2: INICIALIZAR COMPONENTES
         # =====================================================================
-        logger.info("\n[PASO 2] Feature Engineering...")
+        logger.info("\n[PASO 2] Inicializando Feature Engineer y Predictor...")
         fe = FeatureEngineer(config)
-        X = fe.transform(bui_perdida, bui_pm_ewo, bui_line)
-        
+
         # =====================================================================
         # PASO 3: PREDICCIÓN
         # =====================================================================
@@ -223,14 +209,14 @@ def main():
         predictor = Predictor(config)
         
         # =====================================================================
-        # PASO 4: GENERACIÓN DÍA COMPLETO
+        # PASO 4: PREDICCIÓN (1 por máquina, estado actual)
         # =====================================================================
-        logger.info("\n[PASO 4] Generando ventana de 24 horas...")
-        fecha_predicciones = datetime.combine(fecha_hoy, datetime.min.time())
-        
-        predictions_df = generar_predicciones_dia_completo(
+        logger.info("\n[PASO 4] Generando predicciones (1 por máquina)...")
+        fecha_referencia_dt = datetime.combine(fecha_hoy, datetime.min.time())
+
+        predictions_df = generar_predicciones(
             predictor, fe, bui_perdida, bui_pm_ewo, bui_line,
-            fecha_predicciones, logger
+            fecha_referencia_dt, logger
         )
         
         if predictions_df.empty:

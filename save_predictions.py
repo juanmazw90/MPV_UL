@@ -15,6 +15,7 @@ Uso:
 
 import sys
 import os
+import json
 import logging
 import yaml
 import pandas as pd
@@ -30,15 +31,33 @@ from src.utils import setup_logging
 log = logging.getLogger(__name__)
 
 # ============================================================================
-# CONFIGURACIÓN DE UMBRALES
+# CONFIGURACIÓN DE UMBRALES (leídos de inference_config.json)
 # ============================================================================
 
-UMBRAL_PRED_MODELO = 0.3724709494525155  # score >= 0.37 → fl_pred_modelo = 1
-UMBRALES_NIVEL = {
-    'critico': 0.60,
-    'moderado': 0.37,
-    'bajo': 0.15
-}
+def _load_umbrales():
+    """Carga umbrales desde inference_config.json para mantener consistencia con el modelo."""
+    config_path = Path(__file__).parent / 'model' / 'inference_config.json'
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            inference_config = json.load(f)
+        alertas = inference_config['umbrales']['alertas']
+        return {
+            'umbral_pred': inference_config['umbrales']['produccion'],
+            'nivel': {
+                'critico': alertas['critical'],
+                'moderado': alertas['moderate'],
+                'bajo': alertas['low']
+            }
+        }
+    # Fallback si no existe el archivo
+    return {
+        'umbral_pred': 0.3724709494525155,
+        'nivel': {'critico': 0.70, 'moderado': 0.31, 'bajo': 0.10}
+    }
+
+_UMBRALES = _load_umbrales()
+UMBRAL_PRED_MODELO = _UMBRALES['umbral_pred']
+UMBRALES_NIVEL = _UMBRALES['nivel']
 
 
 # ============================================================================
@@ -154,7 +173,7 @@ def preparar_predicciones(predictions_df, de_modelo_version):
     # CALCULAR CAMPOS DERIVADOS
     # ============================================================
     
-    # fl_pred_modelo (1 si score >= 0.31)
+    # fl_pred_modelo (1 si score >= umbral producción)
     df['fl_pred_modelo'] = (df['score'] >= UMBRAL_PRED_MODELO).astype(int)
     
     # de_nivel_riesgo

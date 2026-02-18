@@ -1,34 +1,30 @@
-# Archivos sensibles
-config.yaml
-*.log
-*.csv
+# Credenciales
+.env
 
 # Python
 __pycache__/
 *.pyc
-.conda/
 venv/
-.env
 .venv/
+env/
+.conda/
+
+# Logs
+logs/
+*.log
+
+# Datos
+outputs/
+*.csv
+*.parquet
+
+# Notebooks (fuente de verdad - no se versionan aqui)
+*.ipynb
+
 # Sistema
 .DS_Store
 *.lock
 
-
-# Archivos temporales de test
+# Temporales de test
 test_predictions_*.csv
 test_inference.log
-# Entornos virtuales
-venv/
-.venv/
-env/
-# Credenciales y Config
-.env
-config.yaml
-# Basura de Python y Logs
-__pycache__/
-*.pyc
-logs/
-# Datos temporales
-outputs/
-*.csv
