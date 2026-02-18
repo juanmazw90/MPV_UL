@@ -36,12 +36,34 @@ detect_python() {
 PYTHON_PATH=$(detect_python)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Configuracion de horarios
+# Configuracion de horarios (parametrizables via argumentos)
 # ─────────────────────────────────────────────────────────────────────────────
-# main.py       → 06:00 todos los dias (genera predicciones del dia)
-# update_targets → 23:00 todos los dias (verifica fallas reales de las ultimas 24h)
-CRON_PREDICCIONES="0 6 * * * cd $PROJECT_DIR && $PYTHON_PATH main.py >> $PROJECT_DIR/logs/cron_predicciones.log 2>&1"
-CRON_TARGETS="0 23 * * * cd $PROJECT_DIR && $PYTHON_PATH update_targets.py >> $PROJECT_DIR/logs/cron_targets.log 2>&1"
+#
+# LOGICA TEMPORAL:
+#   main.py corre a HORA_PRED y genera predicciones con horizonte 24h.
+#   update_targets.py debe correr DESPUES de que la ventana de 24h se cierre.
+#   Si main.py corre a las 06:00, la ventana cubre [06:00 hoy → 06:00 mañana].
+#   update_targets corre a HORA_UPDATE (por defecto 07:00 del dia siguiente),
+#   con la query filtrando fe_ventana < NOW() - INTERVAL 24 HOUR.
+#   Esto garantiza que la ventana completa de 24h ya transcurrio.
+#
+# Uso con horarios personalizados:
+#   bash scripts/setup_cron.sh --hora-pred 5 --hora-update 6
+#
+HORA_PRED=${HORA_PRED:-6}        # Predicciones: 06:00 AM (inicio turno manana)
+HORA_UPDATE=${HORA_UPDATE:-7}    # Evaluacion: 07:00 AM (25h despues de prediccion)
+
+# Parsear argumentos --hora-pred y --hora-update
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --hora-pred)   HORA_PRED="$2";   shift 2 ;;
+        --hora-update) HORA_UPDATE="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
+
+CRON_PREDICCIONES="0 $HORA_PRED * * * cd $PROJECT_DIR && $PYTHON_PATH main.py >> $PROJECT_DIR/logs/cron_predicciones.log 2>&1"
+CRON_TARGETS="0 $HORA_UPDATE * * * cd $PROJECT_DIR && $PYTHON_PATH update_targets.py >> $PROJECT_DIR/logs/cron_targets.log 2>&1"
 
 CRON_MARKER="# predictive-maintenance-veszprem"
 
@@ -115,11 +137,11 @@ install_crons() {
     echo ""
     echo "=== Cron jobs instalados correctamente ==="
     echo ""
-    echo "  PREDICCIONES  →  06:00 diario"
+    echo "  PREDICCIONES  →  0${HORA_PRED}:00 diario"
     echo "    $PYTHON_PATH main.py"
     echo "    Log: $PROJECT_DIR/logs/cron_predicciones.log"
     echo ""
-    echo "  UPDATE TARGETS →  23:00 diario"
+    echo "  UPDATE TARGETS →  0${HORA_UPDATE}:00 diario (25h despues → ventana 24h cerrada)"
     echo "    $PYTHON_PATH update_targets.py"
     echo "    Log: $PROJECT_DIR/logs/cron_targets.log"
     echo ""

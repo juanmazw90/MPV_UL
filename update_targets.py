@@ -109,7 +109,7 @@ def obtener_predicciones_pendientes(engine_dev, limit=BATCH_LIMIT):
     log.info("Obteniendo predicciones pendientes de actualizar...")
     
     query = text("""
-        SELECT 
+        SELECT
             id_prediccion,
             id_maquina_dfos,
             id_linea,
@@ -118,7 +118,7 @@ def obtener_predicciones_pendientes(engine_dev, limit=BATCH_LIMIT):
             fl_pred_modelo
         FROM bui_predicciones_hora_dia
         WHERE fl_target_real IS NULL
-          AND fe_ventana < NOW() - INTERVAL 5 HOUR
+          AND fe_ventana < NOW() - INTERVAL 24 HOUR
         ORDER BY fe_ventana ASC
         LIMIT :limit
     """)
