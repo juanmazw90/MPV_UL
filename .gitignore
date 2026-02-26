@@ -13,10 +13,22 @@ env/
 logs/
 *.log
 
-# Datos
+# Datos y artefactos de reentrenamiento
 outputs/
 *.csv
 *.parquet
+
+# Carpetas de reentrenamiento (contenido, no estructura)
+data/raw/*
+data/interim/*
+data/processed/*
+models/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+!outputs/.gitkeep
+!outputs/plots/.gitkeep
 
 # Notebooks (fuente de verdad - no se versionan aqui)
 *.ipynb
