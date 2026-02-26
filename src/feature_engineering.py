@@ -647,7 +647,7 @@ class FeatureEngineer:
                 evento_corto = evento_corto.replace('__', '_')
                 
                 col_rolling = f'{evento_corto}_rolling_{nombre_ventana}'
-                df[col_rolling] = df.groupby('id_maquina_dfos')[evento].transform(
+                df[col_rolling] = df.groupby(['id_fabrica', 'id_maquina_dfos'])[evento].transform(
                     lambda x: x.rolling(window=horas, min_periods=1).sum()
                 )
                 
@@ -675,7 +675,7 @@ class FeatureEngineer:
                 log.warning(f"⚠️ Columna {col_12h} no encontrada")
                 continue
             
-            col_12h_prev = df.groupby('id_maquina_dfos')[col_12h].shift(12)
+            col_12h_prev = df.groupby(['id_fabrica', 'id_maquina_dfos'])[col_12h].shift(12)
             
             df[f'{evento}_trend_24h'] = df[col_12h] - col_12h_prev.fillna(0)
             df[f'{evento}_accel_24h'] = np.where(
@@ -753,11 +753,11 @@ class FeatureEngineer:
             evento_corto = evento.replace('_duration', '').replace('_count', '').replace('_time', '').replace('_and', '')
             evento_corto = evento_corto.replace('__', '_')
             
-            df[f'{evento_corto}_std_7d'] = df.groupby('id_maquina_dfos')[evento].transform(
+            df[f'{evento_corto}_std_7d'] = df.groupby(['id_fabrica', 'id_maquina_dfos'])[evento].transform(
                 lambda x: x.rolling(window=168, min_periods=24).std()
             ).fillna(0)
-            
-            rolling_mean = df.groupby('id_maquina_dfos')[evento].transform(
+
+            rolling_mean = df.groupby(['id_fabrica', 'id_maquina_dfos'])[evento].transform(
                 lambda x: x.rolling(window=168, min_periods=24).mean()
             )
             df[f'{evento_corto}_cv_7d'] = np.where(
@@ -769,8 +769,8 @@ class FeatureEngineer:
         df['horas_desde_ultimo_breakdown'] = 9999.0
         mask_breakdown = df['breakdown_and_equipment_failure_time_count'] > 0
         
-        for maquina in tqdm(df['id_maquina_dfos'].unique(), desc="Máquinas"):
-            mask_maquina = df['id_maquina_dfos'] == maquina
+        for (fabrica, maquina) in tqdm(df[['id_fabrica', 'id_maquina_dfos']].drop_duplicates().itertuples(index=False), desc="Máquinas"):
+            mask_maquina = (df['id_fabrica'] == fabrica) & (df['id_maquina_dfos'] == maquina)
             timestamps_breakdown = df.loc[mask_maquina & mask_breakdown, 'timestamp_hora'].values
             
             if len(timestamps_breakdown) == 0:
@@ -961,12 +961,12 @@ class FeatureEngineer:
                 # Calcular Z-score usando estadísticas del entrenamiento
                 zscores = []
                 for idx, row in df.iterrows():
-                    maquina = row['id_maquina_dfos']
+                    key = (row['id_fabrica'], row['id_maquina_dfos'])
                     valor = row[evento_col]
-                    
-                    if maquina in stats_por_maquina:
-                        mean = stats_por_maquina[maquina]['mean']
-                        std = stats_por_maquina[maquina]['std']
+
+                    if key in stats_por_maquina:
+                        mean = stats_por_maquina[key]['mean']
+                        std = stats_por_maquina[key]['std']
                     else:
                         # Máquina nueva: usar estadísticas globales
                         mean = global_mean
@@ -1107,7 +1107,7 @@ class FeatureEngineer:
         log.info("\n🎯 Paso 17: Filtrando última ventana por máquina...")
 
         # Tomar la última ventana horaria de cada máquina
-        idx_ultimo = df.groupby('id_maquina_dfos')['timestamp_hora'].idxmax()
+        idx_ultimo = df.groupby(['id_fabrica', 'id_maquina_dfos'])['timestamp_hora'].idxmax()
         df_prediccion = df.loc[idx_ultimo].copy()
 
         log.info(f"✅ Ventanas filtradas:")
