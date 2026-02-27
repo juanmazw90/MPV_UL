@@ -1,0 +1,35 @@
+{
+  "fecha_evaluacion": "2026-02-27T20:03:14.576533",
+  "periodo_inicio": "2025-12-04 00:00:00",
+  "periodo_fin": "2025-12-28 00:00:00",
+  "ventanas_evaluadas": 164994,
+  "maquinas_unicas": 753,
+  "ventanas": {
+    "precision": 0.34859660887058147,
+    "recall": 0.7671281006253953,
+    "f1_score": 0.47936243084218844,
+    "auc_roc": 0.821947906121026,
+    "accuracy": 0.7125471229256821,
+    "specificity": 0.7011689567280931,
+    "tp": 21834,
+    "tn": 95732,
+    "fp": 40800,
+    "fn": 6628
+  },
+  "eventos": {
+    "total_eventos": 1113,
+    "eventos_detectados": 1070,
+    "eventos_no_detectados": 43,
+    "recall_eventos": 0.9613656783468104,
+    "anticipacion_promedio_horas": 18.135514018691588,
+    "anticipacion_mediana_horas": 24.0,
+    "anticipacion_min_horas": 1.0,
+    "anticipacion_max_horas": 24.0
+  },
+  "falsas_alarmas": {
+    "total_alertas": 62634,
+    "alertas_correctas": 21834,
+    "falsas_alarmas": 40800,
+    "tasa_falsa_alarma": 0.6514033911294185
+  }
+}
