@@ -744,6 +744,56 @@ LIMIT 30;
 
 ## Changelog
 
+### v1.3 (2026-02)
+
+#### Fix: Aislamiento de maquinas por fabrica en feature engineering
+
+**Problema detectado:** Las operaciones de feature engineering agrupaban por `id_maquina_dfos`
+solo, lo que podia mezclar datos de maquinas con el mismo nombre en fabricas distintas
+(el dataset de entrenamiento contiene multiples fabricas).
+
+**Archivos corregidos:**
+
+**`src/feature_engineering.py`**
+- Paso 8 (rolling windows 2h/6h/12h/24h): `groupby('id_maquina_dfos')` → `groupby(['id_fabrica', 'id_maquina_dfos'])`
+- Paso 9 (tendencias/aceleraciones): `.shift(12)` ahora agrupa por fabrica+maquina
+- Paso 12 (variabilidad std/cv 7 dias): mismo fix en transform de std y mean
+- Paso 12 (horas_desde_ultimo_breakdown): loop itera por `(fabrica, maquina)` en lugar de solo `maquina`
+- Paso 17 (ultima ventana por maquina): `idxmax()` agrupa por fabrica+maquina
+
+```python
+# ANTES - podia mezclar maquinas de distintas fabricas con mismo nombre
+df.groupby('id_maquina_dfos')[evento].transform(...)
+
+# DESPUES - cada maquina se trata de forma aislada por fabrica
+df.groupby(['id_fabrica', 'id_maquina_dfos'])[evento].transform(...)
+```
+
+**`pipeline_reentrenamiento.ipynb`** (celdas 21, 22)
+- Mismo fix aplicado en rolling windows, shift, std/cv 7 dias y z-scores del notebook de entrenamiento
+
+**`pipeline_inferencia_nuevos_datos.ipynb`** (celdas 24, 26)
+- Mismo fix aplicado en rolling windows, shift, std/cv 7 dias y z-scores del notebook de inferencia
+
+**Nota:** En produccion (`main.py`) el riesgo ya estaba mitigado porque se filtra a
+fabrica 21 (Veszprem) antes del feature engineering. El fix es critico para
+reentrenamiento con datos multi-fabrica.
+
+#### Fix: Errores en generacion de preprocessing artifacts (notebook entrenamiento)
+- `stats_por_maquina` (z-scores): revertido a `groupby('id_maquina_dfos')` porque
+  `id_fabrica` no esta disponible en `dataset_features_final.parquet` (fue eliminado en FE)
+- Threshold `is_high_risk_subcategoria`: corregido para usar `df_final` en lugar de
+  `df_con_target` (que no tiene columnas `subcategoria_*`)
+- Fix instalacion Optuna (celda 31): reemplazado `python_exe = r"c:\Python39\python.exe"`
+  por `sys.executable` para usar el entorno Python activo
+
+#### Estructura de carpetas para reentrenamiento
+- `data/raw/` — input: `bui_perdida.parquet`, `bui_pm_ewo.parquet`, `bui_line.parquet`
+- `data/interim/` — generado: dataset pivoteado y con target
+- `data/processed/` — generado: features final, artifacts, splits
+- `models/` — salidas del reentrenamiento (separado de `model/` produccion)
+- `outputs/plots/` — graficos generados por el notebook
+
 ### v1.2 (2026-02)
 - Dashboard MVP (`dashboard_mvp.py`) para stakeholders no tecnicos
 - 3 tabs: Resumen Ejecutivo, Detalle por Maquina, Validacion del Modelo

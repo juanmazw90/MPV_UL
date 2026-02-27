@@ -961,12 +961,12 @@ class FeatureEngineer:
                 # Calcular Z-score usando estadísticas del entrenamiento
                 zscores = []
                 for idx, row in df.iterrows():
-                    key = (row['id_fabrica'], row['id_maquina_dfos'])
+                    maquina = row['id_maquina_dfos']
                     valor = row[evento_col]
 
-                    if key in stats_por_maquina:
-                        mean = stats_por_maquina[key]['mean']
-                        std = stats_por_maquina[key]['std']
+                    if maquina in stats_por_maquina:
+                        mean = stats_por_maquina[maquina]['mean']
+                        std = stats_por_maquina[maquina]['std']
                     else:
                         # Máquina nueva: usar estadísticas globales
                         mean = global_mean
