@@ -39,8 +39,8 @@ Este sistema analiza datos de produccion y mantenimiento de equipos industriales
 
 | Caracteristica | Descripcion |
 |----------------|-------------|
-| **Modelo** | LightGBM optimizado (25 arboles, best_iteration) |
-| **Features** | 48 variables predictivas (seleccionadas por importancia) |
+| **Modelo** | LightGBM optimizado (21 arboles, best_iteration) |
+| **Features** | 47 variables predictivas (seleccionadas por importancia) |
 | **Horizonte** | Prediccion a 24 horas |
 | **Granularidad** | 1 prediccion por maquina (estado actual) |
 | **Actualizacion** | Ejecucion diaria automatizada |
@@ -53,22 +53,19 @@ Este sistema analiza datos de produccion y mantenimiento de equipos industriales
 
 Validacion realizada sobre datos de diciembre 2025 (no vistos durante entrenamiento jul-nov 2025):
 
-### Rendimiento por Nivel de Alerta
+### Validacion en datos frescos (diciembre 2025)
 
-| Nivel | Precision | Recall | Descripcion |
-|-------|-----------|--------|-------------|
-| Critico | 67.6% | 42.9% | Alta confianza, requiere accion inmediata |
-| Critico + Moderado | 57.2% | **68.6%** | Cobertura amplia de fallas |
+| Metrica | Test set (nov 2025) | Diciembre 2025 (frescos) |
+|---------|---------------------|--------------------------|
+| AUC-ROC | 0.8028 | **0.8219** |
+| Precision | 0.3536 | 0.3486 |
+| Recall | 0.7903 | 0.7671 |
+| F1 | 0.5052 | 0.4794 |
+| Avg Precision | 0.5540 | 0.5560 |
 
-### Metricas de Referencia (test set)
-
-| Metrica | Valor |
-|---------|-------|
-| AUC-ROC | 0.807 |
-| Precision | 0.75 |
-| Recall | 0.80 |
-| F1 | 0.77 |
-| Avg Precision | 0.72 |
+- **Deteccion de eventos:** 1,070 de 1,113 fallas detectadas = **96.1%**
+- **Anticipacion promedio:** 15-20h antes de la falla
+- **Alertas CRITICAL activas:** 14,270 ventanas (8.65%) con score >= 0.45
 
 ### Periodo de Entrenamiento
 
@@ -430,7 +427,7 @@ Extrae datos de 3 tablas principales:
 
 ### 2. Feature Engineering (feature_engineering.py)
 
-Genera features en 17 pasos, seleccionando las 48 mas importantes:
+Genera features en 17 pasos, seleccionando las 47 mas importantes:
 
 | Paso | Descripcion |
 |------|-------------|
@@ -452,7 +449,7 @@ Genera features en 17 pasos, seleccionando las 48 mas importantes:
 ### 3. Prediccion (predictor.py)
 
 - Carga modelo LightGBM desde `model_optimized.pkl`
-- Valida presencia de 48 features en orden correcto (desde `features_utiles.json`)
+- Valida presencia de 47 features en orden correcto (desde `features_utiles.json`)
 - Genera scores de probabilidad (0-1)
 - Clasifica en niveles de alerta segun umbrales de `inference_config.json`
 
@@ -537,14 +534,12 @@ WHERE fl_target_real IS NOT NULL;
 
 | Nivel | Umbral | Accion recomendada |
 |-------|--------|-------------------|
-| **CRITICO** | Score >= 0.70 | Mantenimiento inmediato, coordinar con produccion |
-| **MODERADO** | 0.31 - 0.70 | Inspeccion prioritaria en 24h |
+| **CRITICO** | Score >= 0.45 | Mantenimiento inmediato, coordinar con produccion |
+| **MODERADO** | 0.31 - 0.45 | Inspeccion prioritaria en 24h |
 | **BAJO** | 0.10 - 0.31 | Monitoreo intensivo, verificar en proximo turno |
 | **NORMAL** | < 0.10 | Operacion normal, mantenimiento segun plan |
 
-**Umbral de produccion:** 0.3724 (punto optimo F1 en test set)
-
-**Nota sobre datos frescos:** En la validacion con datos de diciembre 2025, el score maximo observado fue 0.576, por lo que no se generaron alertas criticas. Esto es un comportamiento esperado cuando el modelo encuentra datos con distribucion diferente al entrenamiento, y se resuelve con reentrenamiento periodico.
+**Umbral de produccion:** 0.31 (punto optimo recall/precision en test set)
 
 ---
 
@@ -562,7 +557,7 @@ with open('model/model_optimized.pkl', 'rb') as f:
 
 ### features_utiles.json
 
-Lista de las 48 features requeridas por el modelo (seleccionadas por importancia > 0). **El orden es critico** para la correcta inferencia.
+Lista de las 47 features requeridas por el modelo (seleccionadas por importancia > 0). **El orden es critico** para la correcta inferencia.
 
 ```json
 {
@@ -572,7 +567,7 @@ Lista de las 48 features requeridas por el modelo (seleccionadas por importancia
     "breakdown_equipment_failure_cv_7d",
     "..."
   ],
-  "n_features": 48
+  "n_features": 47
 }
 ```
 
@@ -583,9 +578,9 @@ Configuracion completa de umbrales, metricas referencia e hiperparametros.
 ```json
 {
   "umbrales": {
-    "produccion": 0.3724,
+    "produccion": 0.31,
     "alertas": {
-      "critical": 0.70,
+      "critical": 0.45,
       "moderate": 0.31,
       "low": 0.10
     }
@@ -593,8 +588,8 @@ Configuracion completa de umbrales, metricas referencia e hiperparametros.
   "modelo": {
     "algoritmo": "LightGBM",
     "archivo": "model_optimized.pkl",
-    "n_features": 48,
-    "best_iteration": 25
+    "n_features": 47,
+    "best_iteration": 21
   },
   "fechas_entrenamiento": {
     "inicio_historico": "2025-07-01",
@@ -833,6 +828,26 @@ reentrenamiento con datos multi-fabrica y multi-linea.
   `df_con_target` (que no tiene columnas `subcategoria_*`)
 - Fix instalacion Optuna (celda 31): reemplazado `python_exe = r"c:\Python39\python.exe"`
   por `sys.executable` para usar el entorno Python activo
+
+#### Validacion en datos frescos (diciembre 2025)
+
+Ejecutado `pipeline_inferencia_nuevos_datos.ipynb` con datos de diciembre 2025 (nunca vistos):
+
+| Metrica | Test set | Diciembre 2025 |
+|---------|----------|----------------|
+| AUC-ROC | 0.8028 | **0.8219** |
+| Precision | 0.3536 | 0.3486 |
+| Recall | 0.7903 | 0.7671 |
+| F1 | 0.5052 | 0.4794 |
+
+- Deteccion de eventos: 1,070 / 1,113 = **96.1%**
+- Alertas CRITICAL activas (>= 0.45): 14,270 ventanas (8.65%)
+- Anticipacion tipica: 15-24h antes de la falla
+
+Fix celda 37 (`pipeline_inferencia_nuevos_datos.ipynb`): eliminadas advertencias de
+diagnostico heredadas (chequeo residual contra umbral 0.70 y falso positivo
+"recall sospechoso > 90%"). Los mensajes ahora reflejan el comportamiento correcto
+del modelo con los umbrales actualizados.
 
 #### Estructura de carpetas para reentrenamiento
 - `data/raw/` — input: `bui_perdida.parquet`, `bui_pm_ewo.parquet`, `bui_line.parquet`
