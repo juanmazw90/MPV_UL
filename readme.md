@@ -746,38 +746,85 @@ LIMIT 30;
 
 ### v1.3 (2026-02)
 
-#### Fix: Aislamiento de maquinas por fabrica en feature engineering
+#### Modelo re-entrenado post-fix (2026-02-27)
 
-**Problema detectado:** Las operaciones de feature engineering agrupaban por `id_maquina_dfos`
-solo, lo que podia mezclar datos de maquinas con el mismo nombre en fabricas distintas
-(el dataset de entrenamiento contiene multiples fabricas).
+| Metrica | Valor |
+|---------|-------|
+| AUC-ROC test | 0.803 |
+| Avg Precision test | 0.554 |
+| Features usadas | 47 |
+| Best iteration | 21 |
+| Umbral produccion | 0.31 (recall 79%) |
+
+Artefacto `stats_por_maquina`: claves `(id_linea, id_maquina_dfos)` — 885 combinaciones unicas.
+
+#### Umbrales de alerta (`inference_config.json`)
+
+| Nivel | Umbral | Precision | Recall |
+|-------|--------|-----------|--------|
+| CRITICAL | >= 0.45 | 68.7% | 27.4% |
+| MODERATE | >= 0.31 | 35.4% | 79.0% |
+| LOW | >= 0.10 | — | — |
+
+#### Fix: Aislamiento de maquinas por fabrica+linea en feature engineering
+
+**Problema detectado (v2):** Dentro de la misma fabrica, el mismo `id_maquina_dfos` puede
+existir en distintas lineas de produccion (`id_linea`). El agrupamiento por solo
+`['id_fabrica', 'id_maquina_dfos']` mezclaba datos de maquinas homonimas de lineas distintas.
+
+**Clave compuesta correcta:** `['id_fabrica', 'id_linea', 'id_maquina_dfos']`
+
+**Problema detectado (v1):** Las operaciones agrupaban por `id_maquina_dfos` solo,
+mezclando maquinas con el mismo nombre en fabricas distintas.
 
 **Archivos corregidos:**
 
 **`src/feature_engineering.py`**
-- Paso 8 (rolling windows 2h/6h/12h/24h): `groupby('id_maquina_dfos')` → `groupby(['id_fabrica', 'id_maquina_dfos'])`
-- Paso 9 (tendencias/aceleraciones): `.shift(12)` ahora agrupa por fabrica+maquina
+- Paso 8 (rolling windows 2h/6h/12h/24h): `groupby('id_maquina_dfos')` → `groupby(['id_fabrica', 'id_linea', 'id_maquina_dfos'])`
+- Paso 9 (tendencias/aceleraciones): `.shift(12)` ahora agrupa por fabrica+linea+maquina
 - Paso 12 (variabilidad std/cv 7 dias): mismo fix en transform de std y mean
-- Paso 12 (horas_desde_ultimo_breakdown): loop itera por `(fabrica, maquina)` en lugar de solo `maquina`
-- Paso 17 (ultima ventana por maquina): `idxmax()` agrupa por fabrica+maquina
+- Paso 12 (horas_desde_ultimo_breakdown): loop itera por `(fabrica, linea, maquina)`
+- Paso 17 (ultima ventana por maquina): `idxmax()` agrupa por fabrica+linea+maquina
 
 ```python
-# ANTES - podia mezclar maquinas de distintas fabricas con mismo nombre
+# ANTES - mezclaba maquinas de distintas fabricas con mismo nombre
 df.groupby('id_maquina_dfos')[evento].transform(...)
 
-# DESPUES - cada maquina se trata de forma aislada por fabrica
-df.groupby(['id_fabrica', 'id_maquina_dfos'])[evento].transform(...)
+# DESPUES - cada maquina se trata de forma aislada por fabrica+linea+maquina
+df.groupby(['id_fabrica', 'id_linea', 'id_maquina_dfos'])[evento].transform(...)
 ```
 
-**`pipeline_reentrenamiento.ipynb`** (celdas 21, 22)
-- Mismo fix aplicado en rolling windows, shift, std/cv 7 dias y z-scores del notebook de entrenamiento
+**`pipeline_reentrenamiento.ipynb`** (celdas 14, 17, 21, 22)
+- Celda 14 (pivoteo): `maquinas_unicas` ahora usa combinaciones unicas de
+  `['id_fabrica', 'id_linea', 'id_maquina_dfos']`; el filtrado de chunks usa merge
+  por las 3 columnas; el loop interno itera sobre `(fabrica, linea, maquina)` en lugar
+  de solo `maquina`
+- Celda 17 (target): loop de marcado de fallas y exclusion de primeras horas ahora
+  itera por `(fabrica, linea, maquina)` — evita que fallas de MAQUINA_A/linea_7 marquen
+  erroneamente ventanas de MAQUINA_A/linea_5 como target=1
+- Celda 21: sort, rolling windows, shift, std/cv 7 dias y loop de horas_desde_ultimo_breakdown
+  actualizados a clave compuesta de 3 columnas
+- Celda 22: z-scores (anomalias) actualizados a clave compuesta de 3 columnas
 
-**`pipeline_inferencia_nuevos_datos.ipynb`** (celdas 24, 26)
-- Mismo fix aplicado en rolling windows, shift, std/cv 7 dias y z-scores del notebook de inferencia
+**`pipeline_inferencia_nuevos_datos.ipynb`** (celdas 15, 24, 26)
+
+- Celda 15 (pivoteo): misma correccion que reentrenamiento celda 14 — `maquinas_unicas`
+  ahora usa combinaciones unicas de `['id_fabrica', 'id_linea', 'id_maquina_dfos']`,
+  filtrado de chunks via merge por las 3 columnas, loop interno itera sobre `(fabrica, linea, maquina)`
+- Celda 24: rolling windows, shift (tendencias), std/cv 7 dias y loop de
+  horas_desde_ultimo_breakdown actualizados a clave compuesta de 3 columnas
+- Celda 26: z-scores (anomalias) actualizados a `groupby(['id_fabrica', 'id_linea', 'id_maquina_dfos'])`
+
+**`pipeline_reentrenamiento.ipynb`** (celda 26 — artifacts)
+
+- `stats_por_maquina` ahora agrupa por `['id_linea', 'id_maquina_dfos']`, generando
+  claves `(id_linea, 'MAQUINA_A')` en lugar de solo `'MAQUINA_A'`
+- Coordinado con el lookup en `feature_engineering.py` PASO 13 que ahora usa
+  `key = (id_linea, maquina)` para buscar estadisticas por maquina en los artifacts
 
 **Nota:** En produccion (`main.py`) el riesgo ya estaba mitigado porque se filtra a
 fabrica 21 (Veszprem) antes del feature engineering. El fix es critico para
-reentrenamiento con datos multi-fabrica.
+reentrenamiento con datos multi-fabrica y multi-linea.
 
 #### Fix: Errores en generacion de preprocessing artifacts (notebook entrenamiento)
 - `stats_por_maquina` (z-scores): revertido a `groupby('id_maquina_dfos')` porque
