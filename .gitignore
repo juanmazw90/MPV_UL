@@ -18,17 +18,17 @@ outputs/
 *.csv
 *.parquet
 
-# Carpetas de reentrenamiento (contenido, no estructura)
+# Datos crudos (no versionados)
 data/raw/*
-data/interim/*
-data/processed/*
-models/*
 !data/raw/.gitkeep
+
+# Datos procesados: se versionan PKLs, no parquets (cubiertos por *.parquet arriba)
 !data/interim/.gitkeep
 !data/processed/.gitkeep
-!models/.gitkeep
 !outputs/.gitkeep
 !outputs/plots/.gitkeep
+
+# Models: se versionan todos los archivos generados por el reentrenamiento
 
 # Notebooks (fuente de verdad - no se versionan aqui)
 *.ipynb
