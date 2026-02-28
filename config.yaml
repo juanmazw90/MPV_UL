@@ -44,9 +44,9 @@ model:
 # El predictor.py lee de inference_config.json, NO de aqui.
 # Se documentan aqui solo como referencia.
 thresholds:
-  production: 0.3724709494525155    # Umbral binario (optimizado en test)
+  production: 0.31                  # Umbral binario (optimizado en test)
   alertas:
-    critical: 0.7                   # >= 0.70 → Mantenimiento INMEDIATO
+    critical: 0.45                  # >= 0.45 → Mantenimiento INMEDIATO
     moderate: 0.31                  # >= 0.31 → Inspeccion PRIORITARIA 24h
     low: 0.10                       # >= 0.10 → Monitoreo INTENSIVO
 

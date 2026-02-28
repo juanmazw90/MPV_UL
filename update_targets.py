@@ -144,6 +144,7 @@ def cargar_perdidas_en_cache(engine_prod, fecha_inicio, fecha_fin):
         SELECT
             id_perdida,
             id_maquina_dfos,
+            id_linea,
             fe_inicio,
             fe_fin,
             de_perdida_2,
@@ -152,7 +153,7 @@ def cargar_perdidas_en_cache(engine_prod, fecha_inicio, fecha_fin):
         FROM bui_perdida
         WHERE de_perdida_2 = 'Breakdown & Equipment Failure Time'
           AND fe_inicio BETWEEN :fecha_inicio AND :fecha_fin
-        ORDER BY id_maquina_dfos, fe_inicio
+        ORDER BY id_maquina_dfos, id_linea, fe_inicio
     """)
 
     df = pd.read_sql(query, engine_prod, params={
@@ -210,7 +211,7 @@ def obtener_ewos_validas(engine_prod, fecha_inicio, fecha_fin):
     return ewos_set
 
 
-def verificar_falla_grave_en_cache(df_perdidas, ewos_validas, id_maquina, fe_ventana):
+def verificar_falla_grave_en_cache(df_perdidas, ewos_validas, id_maquina, id_linea, fe_ventana):
     """
     Verifica si hubo falla GRAVE en las proximas 24h desde fe_ventana.
 
@@ -225,6 +226,7 @@ def verificar_falla_grave_en_cache(df_perdidas, ewos_validas, id_maquina, fe_ven
         df_perdidas:  DataFrame con breakdowns en cache (incluye id_perdida, duracion_minutos)
         ewos_validas: Set de id_perdida que tienen EWO correctiva valida
         id_maquina:   ID de la maquina a verificar
+        id_linea:     ID de la linea de produccion (evita mezclar maquinas homonimas)
         fe_ventana:   Timestamp de la prediccion (hora T)
 
     Returns:
@@ -233,7 +235,10 @@ def verificar_falla_grave_en_cache(df_perdidas, ewos_validas, id_maquina, fe_ven
     # Ventana de prediccion: breakdowns que INICIAN en las proximas 24h
     fe_fin_ventana = fe_ventana + timedelta(hours=24)
 
-    perdidas_maquina = df_perdidas[df_perdidas['id_maquina_dfos'] == id_maquina]
+    perdidas_maquina = df_perdidas[
+        (df_perdidas['id_maquina_dfos'] == id_maquina) &
+        (df_perdidas['id_linea'] == id_linea)
+    ]
 
     if len(perdidas_maquina) == 0:
         return 0
@@ -357,17 +362,17 @@ def update_targets(config):
         total_sin_falla = 0
         total_aciertos = 0
         
-        for id_maquina, grupo in tqdm(predicciones.groupby('id_maquina_dfos'),
-                                      desc="Procesando maquinas",
-                                      unit="maquina"):
-            
+        for (id_maquina, id_linea), grupo in tqdm(predicciones.groupby(['id_maquina_dfos', 'id_linea']),
+                                                   desc="Procesando maquinas",
+                                                   unit="maquina"):
+
             for _, row in grupo.iterrows():
                 id_prediccion = row['id_prediccion']
                 fe_ventana = row['fe_ventana']
                 pred_modelo = row['fl_pred_modelo']
-                
+
                 target_real = verificar_falla_grave_en_cache(
-                    df_perdidas, ewos_validas, id_maquina, fe_ventana
+                    df_perdidas, ewos_validas, id_maquina, id_linea, fe_ventana
                 )
                 
                 actualizar_prediccion(engine_dev, id_prediccion, target_real, pred_modelo)

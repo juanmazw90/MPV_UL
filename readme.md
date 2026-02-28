@@ -775,6 +775,10 @@ mezclando maquinas con el mismo nombre en fabricas distintas.
 **Archivos corregidos:**
 
 **`src/feature_engineering.py`**
+
+- Pivoteo (`pivotar_eventos_por_maquina_hora`): `maquinas_unicas` ahora usa combinaciones unicas de
+  `['id_fabrica', 'id_linea', 'id_maquina_dfos']`; el filtrado de chunks usa pre-filtro por id_maquina_dfos
+  y filtrado preciso por las 3 columnas; el loop interno itera sobre `(fabrica, linea, maquina)`
 - Paso 8 (rolling windows 2h/6h/12h/24h): `groupby('id_maquina_dfos')` → `groupby(['id_fabrica', 'id_linea', 'id_maquina_dfos'])`
 - Paso 9 (tendencias/aceleraciones): `.shift(12)` ahora agrupa por fabrica+linea+maquina
 - Paso 12 (variabilidad std/cv 7 dias): mismo fix en transform de std y mean
@@ -817,9 +821,17 @@ df.groupby(['id_fabrica', 'id_linea', 'id_maquina_dfos'])[evento].transform(...)
 - Coordinado con el lookup en `feature_engineering.py` PASO 13 que ahora usa
   `key = (id_linea, maquina)` para buscar estadisticas por maquina en los artifacts
 
+**`update_targets.py`**
+
+- `cargar_perdidas_en_cache`: agregado `id_linea` al SELECT de bui_perdida
+- `verificar_falla_grave_en_cache`: agrega parametro `id_linea`, filtra por
+  `(id_maquina_dfos, id_linea)` en lugar de solo `id_maquina_dfos`
+- Loop principal: `groupby('id_maquina_dfos')` → `groupby(['id_maquina_dfos', 'id_linea'])`
+
 **Nota:** En produccion (`main.py`) el riesgo ya estaba mitigado porque se filtra a
 fabrica 21 (Veszprem) antes del feature engineering. El fix es critico para
-reentrenamiento con datos multi-fabrica y multi-linea.
+reentrenamiento con datos multi-fabrica y para `update_targets.py` que opera
+sobre maquinas de cualquier linea dentro de Veszprem.
 
 #### Fix: Errores en generacion de preprocessing artifacts (notebook entrenamiento)
 - `stats_por_maquina` (z-scores): revertido a `groupby('id_maquina_dfos')` porque

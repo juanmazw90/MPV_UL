@@ -115,7 +115,8 @@ def pivotar_eventos_por_maquina_hora(perdida_clean):
                         "Verifique que existen registros en el período especificado.")
 
     perdida_clean['timestamp_hora'] = perdida_clean['fe_inicio'].dt.floor('h')
-    maquinas_unicas = perdida_clean['id_maquina_dfos'].unique()
+    # Clave compuesta: misma máquina puede existir en distintas líneas
+    maquinas_unicas = perdida_clean[['id_fabrica', 'id_linea', 'id_maquina_dfos']].drop_duplicates().values.tolist()
     log.info(f"Total máquinas a procesar: {len(maquinas_unicas)}")
 
     chunk_size = 100
@@ -123,16 +124,18 @@ def pivotar_eventos_por_maquina_hora(perdida_clean):
 
     for i in tqdm(range(0, len(maquinas_unicas), chunk_size), desc="Chunks de máquinas"):
         chunk_maquinas = maquinas_unicas[i:i+chunk_size]
-        df_chunk = perdida_clean[perdida_clean['id_maquina_dfos'].isin(chunk_maquinas)].copy()
+        maquinas_ids = [m[2] for m in chunk_maquinas]  # pre-filtrado por id_maquina_dfos
+        df_chunk = perdida_clean[perdida_clean['id_maquina_dfos'].isin(maquinas_ids)].copy()
         resultados_chunk = []
 
-        for maquina in chunk_maquinas:
-            df_maquina = df_chunk[df_chunk['id_maquina_dfos'] == maquina]
+        for (id_fabrica, id_linea, maquina) in chunk_maquinas:
+            df_maquina = df_chunk[
+                (df_chunk['id_fabrica'] == id_fabrica) &
+                (df_chunk['id_linea'] == id_linea) &
+                (df_chunk['id_maquina_dfos'] == maquina)
+            ]
             if len(df_maquina) == 0:
                 continue
-
-            id_linea = df_maquina['id_linea'].iloc[0]
-            id_fabrica = df_maquina['id_fabrica'].iloc[0]
 
             for timestamp_hora, df_ventana in df_maquina.groupby('timestamp_hora'):
                 features = crear_features_ventana(df_ventana)

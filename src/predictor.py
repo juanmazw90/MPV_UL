@@ -358,6 +358,6 @@ class Predictor:
             'version': self.config['model']['version'],
             'num_features': len(self.features_necesarias),
             'features': self.features_necesarias,
-            'thresholds': self.inference_config['thresholds'],
+            'thresholds': self.inference_config['umbrales'],
             'num_trees': self.model.num_trees() if self.model else None
         }
