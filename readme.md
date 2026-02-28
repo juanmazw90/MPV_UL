@@ -116,7 +116,7 @@ Validacion realizada sobre datos de diciembre 2025 (no vistos durante entrenamie
 | `update_targets.py` | Actualiza target_real despues de 24h |
 | `dashboard_mvp.py` | Dashboard Streamlit para stakeholders |
 | `src/db_connector.py` | Conexion y extraccion de datos desde MySQL/Azure |
-| `src/feature_engineering.py` | Transformacion de datos raw a 48 features (17 pasos) |
+| `src/feature_engineering.py` | Transformacion de datos raw a 47 features (17 pasos) |
 | `src/predictor.py` | Carga del modelo y generacion de predicciones |
 | `src/pipeline_utils.py` | Funciones auxiliares de pipeline (carga de features, transformaciones) |
 | `src/utils.py` | Funciones auxiliares (logging, alertas) |
@@ -148,7 +148,7 @@ python -m streamlit run dashboard_mvp.py
 - Se detecta automaticamente y se visualiza directo
 
 **Dataset con features** (ej. `dataset_features_final.parquet`):
-- Contiene las 48 features + `timestamp_hora` + `id_maquina_dfos`
+- Contiene las 47 features + `timestamp_hora` + `id_maquina_dfos`
 - Se detecta automaticamente, ejecuta el modelo y muestra resultados
 
 ### Tabs del Dashboard
@@ -239,7 +239,7 @@ Asegurarse de que existen los siguientes archivos en `model/`:
 ```
 model/
 ├── model_optimized.pkl           # Modelo LightGBM
-├── features_utiles.json          # Lista de 48 features
+├── features_utiles.json          # Lista de 47 features
 ├── inference_config.json         # Umbrales y parametros
 └── preprocessing_artifacts.pkl   # Artefactos de preprocesamiento
 ```
@@ -288,9 +288,9 @@ model:
 
 # Umbrales (referencia - la fuente de verdad es inference_config.json)
 thresholds:
-  production: 0.3724709494525155
+  production: 0.31
   alertas:
-    critical: 0.7
+    critical: 0.45
     moderate: 0.31
     low: 0.10
 
@@ -368,14 +368,14 @@ perdidasDiario/
 │   ├── __init__.py
 │   ├── config_loader.py             # Carga config.yaml con soporte ${VAR:default}
 │   ├── db_connector.py              # Conexion y extraccion de BD
-│   ├── feature_engineering.py       # Generacion de 48 features (17 pasos)
+│   ├── feature_engineering.py       # Generacion de 47 features (17 pasos)
 │   ├── predictor.py                 # Carga modelo y prediccion
 │   ├── pipeline_utils.py            # Utilidades de pipeline (carga features, transformaciones)
 │   └── utils.py                     # Funciones auxiliares
 │
 ├── model/
 │   ├── model_optimized.pkl          # Modelo LightGBM (pickle)
-│   ├── features_utiles.json         # Lista de 48 features ordenadas
+│   ├── features_utiles.json         # Lista de 47 features ordenadas
 │   ├── inference_config.json        # Umbrales, metricas, hiperparametros
 │   └── preprocessing_artifacts.pkl  # LabelEncoders, stats, thresholds
 │
@@ -407,7 +407,7 @@ Los notebooks son la **fuente de verdad** del proyecto. El codigo en `src/` debe
 
 Los notebooks generan los archivos en `model/` que usa el sistema en produccion:
 - `model_optimized.pkl` - Modelo entrenado
-- `features_utiles.json` - 48 features seleccionadas (orden importa)
+- `features_utiles.json` - 47 features seleccionadas (orden importa)
 - `inference_config.json` - Umbrales, metricas referencia, hiperparametros
 - `preprocessing_artifacts.pkl` - Encoders, estadisticas, thresholds
 
@@ -456,7 +456,7 @@ Genera features en 17 pasos, seleccionando las 47 mas importantes:
 ### 4. Guardado (save_predictions.py)
 
 - Inserta predicciones en `bui_predicciones_hora`
-- Calcula `fl_pred_modelo` (1 si score >= 0.3724)
+- Calcula `fl_pred_modelo` (1 si score >= 0.31)
 - Maneja duplicados con INSERT IGNORE
 
 ### 5. Actualizacion de Targets (update_targets.py)
@@ -480,7 +480,7 @@ Genera features en 17 pasos, seleccionando las 47 mas importantes:
 | `fe_ventana` | DATETIME | Ventana horaria predicha |
 | `nm_score` | DECIMAL(5,4) | Score del modelo (0.0000-1.0000) |
 | `de_nivel_riesgo` | VARCHAR(20) | critico/moderado/bajo/normal |
-| `fl_pred_modelo` | TINYINT | 1 si score >= 0.3724, 0 si no |
+| `fl_pred_modelo` | TINYINT | 1 si score >= 0.31, 0 si no |
 | `fl_target_real` | TINYINT NULL | NULL=pendiente, 0=no falla, 1=falla |
 | `fl_acierto` | TINYINT NULL | NULL=pendiente, 0=error, 1=acierto |
 | `de_modelo_version` | VARCHAR(20) | Version del modelo |
@@ -650,7 +650,7 @@ tail -f logs/predictions_$(date +%Y-%m-%d).log
 
 ### Error: "Features faltantes"
 
-**Causa**: El feature engineering no genero todas las 48 features.
+**Causa**: El feature engineering no genero todas las 47 features.
 
 **Solucion**:
 1. Verificar que `preprocessing_artifacts.pkl` existe
