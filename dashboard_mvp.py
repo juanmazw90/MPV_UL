@@ -312,18 +312,15 @@ def run_inference(df):
 
     # Add target if available
     if 'target' in df.columns:
-        target_map = df.set_index(['id_maquina_dfos', 'timestamp_hora'])['target']
-        results['target'] = results.set_index(['id_maquina_dfos', 'timestamp_hora']).index.map(
-            lambda x: target_map.get(x, np.nan)
+        merge_keys = ['id_maquina_dfos', 'timestamp_hora']
+        if 'id_linea' in results.columns and 'id_linea' in df.columns:
+            merge_keys = ['id_maquina_dfos', 'id_linea', 'timestamp_hora']
+        results = results.merge(
+            df[merge_keys + ['target']].drop_duplicates(subset=merge_keys),
+            on=merge_keys,
+            how='left'
         )
-        # Fallback merge if map fails
-        if results['target'].isna().all():
-            results = results.drop(columns=['target'])
-            results = results.merge(
-                df[['id_maquina_dfos', 'timestamp_hora', 'target']],
-                on=['id_maquina_dfos', 'timestamp_hora'],
-                how='left'
-            )
+        results['target'] = pd.to_numeric(results['target'], errors='coerce')
 
     return results
 
@@ -900,21 +897,6 @@ def main():
                                     st.error("No hay datos en el rango seleccionado.")
                                 else:
                                     df_results = run_inference(df_filtered)
-                                    # Merge target back
-                                    if 'target' in df_filtered.columns:
-                                        target_series = df_filtered.set_index(
-                                            ['id_maquina_dfos', 'timestamp_hora']
-                                        )['target']
-                                        df_results = df_results.merge(
-                                            df_filtered[['id_maquina_dfos', 'timestamp_hora', 'target']],
-                                            on=['id_maquina_dfos', 'timestamp_hora'],
-                                            how='left',
-                                            suffixes=('', '_orig')
-                                        )
-                                        if 'target_orig' in df_results.columns:
-                                            df_results['target'] = df_results['target'].fillna(
-                                                df_results['target_orig'])
-                                            df_results.drop(columns=['target_orig'], inplace=True)
 
                                     has_target = 'target' in df_results.columns and df_results['target'].notna().any()
                                     st.session_state['df_results'] = df_results

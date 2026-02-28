@@ -737,6 +737,62 @@ LIMIT 30;
 
 ---
 
+## Reduccion de Falsas Alarmas
+
+Validacion en datos de diciembre 2025 arrojó:
+
+- **Deteccion exitosa (TP):** 16.3%
+- **Falsa alarma (FP):** 27.2%
+
+El umbral de produccion (0.31) fue optimizado para maximizar recall (detectar la mayor cantidad de fallas), lo cual inherentemente genera mas falsas alarmas. Las siguientes estrategias pueden reducirlas sin re-entrenar el modelo:
+
+### 1. Subir el umbral de produccion (inmediato)
+
+Editar `model/inference_config.json` y `config.yaml`:
+
+| Umbral        | Efecto esperado                                  |
+|---------------|--------------------------------------------------|
+| 0.31 (actual) | Recall ~77%, FP alto                             |
+| 0.38–0.42     | Balance moderado FP/FN                           |
+| 0.45          | Precision maxima (coincide con umbral CRITICAL)  |
+
+La pregunta operativa clave: **cuantas fallas perdidas tolera el negocio a cambio de menos falsas alarmas.**
+
+### 2. Confirmacion temporal (sin re-entrenar)
+
+En vez de alertar con una sola hora en riesgo, exigir **2-3 horas consecutivas** por encima del umbral para la misma maquina antes de emitir alerta.
+
+Las fallas reales tienden a mostrar scores sostenidos. Las falsas alarmas suelen ser spikes transitorios de 1 hora que vuelven a bajar.
+
+Implementacion: post-procesamiento sobre `df_results` agrupando por `(id_maquina_dfos, id_linea)` y verificando rachas consecutivas.
+
+### 3. Supresion post-mantenimiento
+
+Si una maquina tuvo PM reciente (`horas_desde_ultimo_pm < 48`), el modelo puede generar alertas aunque el riesgo operativo real es bajo (el mantenimiento ya resolvio el problema).
+
+Filtro sugerido: si `horas_desde_ultimo_pm < 48`, bajar un nivel de alerta o suprimir directamente.
+
+### 4. Revision del criterio de falla grave (target)
+
+El target se define en `update_targets.py` como falla grave con duracion >= 10/20/60 min segun tipo. Si ese umbral es bajo, el modelo aprende a alertar por eventos menores.
+
+Subir el umbral minimo de duracion en `verificar_falla_grave_en_cache()` haría al modelo mas selectivo en el proximo reentrenamiento.
+
+### 5. Re-entrenar optimizando precision (recomendado a mediano plazo)
+
+El modelo fue entrenado priorizando recall. Re-entrenar ajustando:
+
+- `scale_pos_weight` en LightGBM para balancear clases
+- O usar `class_weight` menos agresivo hacia la clase positiva
+
+Requiere volver al `pipeline_reentrenamiento.ipynb`.
+
+### Recomendacion practica inmediata
+
+Combinar **opcion 1 + opcion 2**: subir umbral a ~0.38 y aplicar confirmacion de 2 horas consecutivas. Son cambios de post-procesamiento, sin tocar el modelo entrenado.
+
+---
+
 ## Changelog
 
 ### v1.3 (2026-02)
@@ -867,6 +923,15 @@ del modelo con los umbrales actualizados.
 - `data/processed/` — generado: features final, artifacts, splits
 - `models/` — salidas del reentrenamiento (separado de `model/` produccion)
 - `outputs/plots/` — graficos generados por el notebook
+
+#### Fix: dashboard_mvp.py - target merge con clave compuesta
+
+- `run_inference()`: reemplazado el mapping `target_map.get(x)` (que devolvía una Series
+  en lugar de un escalar cuando la misma maquina existe en varias lineas con igual timestamp)
+  por un merge directo con clave compuesta `['id_maquina_dfos', 'id_linea', 'timestamp_hora']`
+  y cast a numerico al final
+- Eliminado el segundo merge redundante de `target` en `main()` que replicaba la misma logica
+  con el mismo bug
 
 ### v1.2 (2026-02)
 - Dashboard MVP (`dashboard_mvp.py`) para stakeholders no tecnicos
